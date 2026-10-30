@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "generator": "DisruptionIQ Synthetic Seed Generator v1.0",
+    "generated_at": "2026-10-30T08:00:00Z",
+    "corridor": "Hosur-Bengaluru-Chennai Industrial Belt",
+    "scenarios_embedded": [
+      "Scenario 1: Supplier X (Apex Components) delayed 5 days -> 12 orders at risk (3 P1 high-priority customers)",
+      "Scenario 2: Carrier webhook (Delhivery DL123456 / BlueDart 77812045) delayed + Warehouse B stock shortage -> reallocate from Warehouse A (Bengaluru WH-BLR-02) or expedite"
+    ]
+  },
+  "suppliers": [
+    { "id": "SUP-01", "code": "APEX", "name": "Apex Components Ltd", "plant_location": "Hosur, Tamil Nadu", "performance_score": 58, "lead_time_days": 5, "contact": "operations@apexcomp.in" },
+    { "id": "SUP-02", "code": "VTX", "name": "Vertex Electro Parts", "plant_location": "Pune, Maharashtra", "performance_score": 91, "lead_time_days": 3, "contact": "sales@vertexelectro.in" },
+    { "id": "SUP-03", "code": "DEC", "name": "Deccan Polymers", "plant_location": "Hyderabad, Telangana", "performance_score": 84, "lead_time_days": 4, "contact": "support@deccanpoly.in" },
+    { "id": "SUP-04", "code": "NOV", "name": "Nova Textiles", "plant_location": "Tiruppur, Tamil Nadu", "performance_score": 76, "lead_time_days": 2, "contact": "dispatch@novatex.in" },
+    { "id": "SUP-05", "code": "COR", "name": "Coromandel Metals", "plant_location": "Hosur, Tamil Nadu", "performance_score": 70, "lead_time_days": 4, "contact": "info@coromandel.in" }
+  ],
+  "warehouses": [
+    { "id": "WH-CHN-01", "name": "Chennai – Ambattur (Warehouse B)", "city": "Chennai", "capacity": 400, "role": "Affected" },
+    { "id": "WH-BLR-02", "name": "Bengaluru – Hoskote (Warehouse A)", "city": "Bengaluru", "capacity": 500, "role": "Transfer source" },
+    { "id": "WH-PDY-05", "name": "Puducherry – Sedarapet", "city": "Puducherry", "capacity": 120, "role": "Nearby" },
+    { "id": "WH-CBE-04", "name": "Coimbatore – Kurichi", "city": "Coimbatore", "capacity": 200, "role": "Nearby" },
+    { "id": "WH-HYD-03", "name": "Hyderabad – Shamshabad", "city": "Hyderabad", "capacity": 350, "role": "Affected" }
+  ],
+  "inventory": [
+    { "id": "INV-CHN-01", "warehouse_id": "WH-CHN-01", "sku": "ICM-220", "product_name": "Industrial Control Module", "on_hand": 35, "reserved": 0, "safety_stock": 40 },
+    { "id": "INV-BLR-01", "warehouse_id": "WH-BLR-02", "sku": "ICM-220", "product_name": "Industrial Control Module", "on_hand": 180, "reserved": 0, "safety_stock": 60 },
+    { "id": "INV-PDY-01", "warehouse_id": "WH-PDY-05", "sku": "ICM-220", "product_name": "Industrial Control Module", "on_hand": 22, "reserved": 0, "safety_stock": 10 },
+    { "id": "INV-CBE-01", "warehouse_id": "WH-CBE-04", "sku": "ICM-220", "product_name": "Industrial Control Module", "on_hand": 40, "reserved": 0, "safety_stock": 15 },
+    { "id": "INV-HYD-01", "warehouse_id": "WH-HYD-03", "sku": "ICM-220", "product_name": "Industrial Control Module", "on_hand": 62, "reserved": 0, "safety_stock": 20 }
+  ],
+  "shipments": [
+    { "id": "SHP-7731", "tracking_no": "DL123456", "carrier": "Delhivery", "supplier_id": "SUP-01", "destination_warehouse_id": "WH-CHN-01", "sku": "ICM-220", "quantity": 200, "status": "DELAYED", "original_eta": "2026-10-29T18:00:00Z", "revised_eta": "2026-11-03T18:00:00Z", "delay_days": 5, "last_updated": "2026-10-30T09:00:00Z" },
+    { "id": "SHP-7745", "tracking_no": "77812045", "carrier": "BlueDart", "supplier_id": "SUP-04", "destination_warehouse_id": "WH-BLR-02", "sku": "FAB-112", "quantity": 250, "status": "IN_TRANSIT", "original_eta": "2026-10-30T12:00:00Z", "revised_eta": "2026-10-30T21:00:00Z", "delay_days": 0.4, "last_updated": "2026-10-30T08:54:00Z" }
+  ],
+  "orders": [
+    { "order_id": "ORD-10482", "customer": "Sundaram Motors", "area": "Ambattur", "priority": "P1", "deadline_hours": 18, "deadline_label": "30 Oct, 06:00", "quantity": 40, "shortage": 40, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600058", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10477", "customer": "Coastal Pharma Equipment", "area": "Guindy", "priority": "P1", "deadline_hours": 26, "deadline_label": "30 Oct, 14:00", "quantity": 30, "shortage": 30, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600032", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10485", "customer": "Bharat Heavy Electricals", "area": "Ennore", "priority": "P1", "deadline_hours": 32, "deadline_label": "30 Oct, 20:00", "quantity": 25, "shortage": 25, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600057", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10491", "customer": "Velan Auto Parts", "area": "Velachery", "priority": "P2", "deadline_hours": 44, "deadline_label": "31 Oct, 08:00", "quantity": 25, "shortage": 20, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600042", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10495", "customer": "Marina Robotics", "area": "Perungudi", "priority": "P2", "deadline_hours": 60, "deadline_label": "1 Nov, 00:00", "quantity": 15, "shortage": 15, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600096", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10498", "customer": "Southern Railway Integral Coach", "area": "Perambur", "priority": "P2", "deadline_hours": 66, "deadline_label": "1 Nov, 06:00", "quantity": 20, "shortage": 15, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600038", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10501", "customer": "Ashok Leyland Assembly", "area": "Sriperumbudur", "priority": "P2", "deadline_hours": 72, "deadline_label": "1 Nov, 12:00", "quantity": 18, "shortage": 12, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "602105", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10503", "customer": "Lakshmi Machine Tools", "area": "Ambattur", "priority": "P3", "deadline_hours": 84, "deadline_label": "2 Nov, 00:00", "quantity": 12, "shortage": 10, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600058", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10506", "customer": "Kaveri Precision Drives", "area": "Oragadam", "priority": "P3", "deadline_hours": 96, "deadline_label": "2 Nov, 12:00", "quantity": 10, "shortage": 8, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "602105", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10508", "customer": "Madras Fertilizers Lab", "area": "Manali", "priority": "P3", "deadline_hours": 108, "deadline_label": "3 Nov, 00:00", "quantity": 10, "shortage": 5, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600068", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10510", "customer": "Bayline Foods", "area": "Adyar", "priority": "P4", "deadline_hours": 120, "deadline_label": "3 Nov, 12:00", "quantity": 8, "shortage": 5, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600020", "updated_at": "2026-10-30T09:00:00Z" },
+    { "order_id": "ORD-10514", "customer": "Coromandel Engineering", "area": "Tondiarpet", "priority": "P4", "deadline_hours": 132, "deadline_label": "4 Nov, 00:00", "quantity": 6, "shortage": 4, "sku": "ICM-220", "shipment_id": "SHP-7731", "delivery_pincode": "600081", "updated_at": "2026-10-30T09:00:00Z" }
+  ],
+  "deliberate_bad_records_for_validation_testing": [
+    { "order_id": "ORD-10482", "customer": "Sundaram Motors", "quantity": 40, "delivery_pincode": "600058", "reason_planted": "Duplicate order_id (same as row 1)" },
+    { "order_id": "ORD-10533", "customer": "Missing Pincode Corp", "quantity": 10, "delivery_pincode": "", "reason_planted": "Missing required field: delivery_pincode" },
+    { "order_id": "ORD-10541", "customer": "Negative Qty Ltd", "quantity": -4, "delivery_pincode": "600058", "reason_planted": "Invalid negative quantity (-4)" },
+    { "order_id": "ORD-10477", "customer": "Coastal Pharma Equipment", "quantity": 30, "delivery_pincode": "600032", "updated_at": "2026-10-28T05:00:00Z", "reason_planted": "Conflicting older timestamp (2026-10-28T05:00:00Z < live record 2026-10-30T09:00:00Z)" }
+  ]
+}

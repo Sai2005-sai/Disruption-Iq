@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --canvas: 246 248 251;
+    --surface: 255 255 255;
+    --surface-2: 241 244 248;
+    --line: 226 232 240;
+    --ink: 15 23 42;
+    --ink-2: 51 65 85;
+    --muted: 100 116 139;
+    --primary: 15 42 74;
+    --primary-fg: 255 255 255;
+    --sidebar: 15 42 74;
+    --accent: 20 184 166;
+    --accent-ink: 15 118 110;
+    --info: 37 99 235;
+    --info-ink: 29 78 216;
+    --risk-low: 22 163 74;
+    --risk-low-ink: 21 128 61;
+    --risk-moderate: 217 119 6;
+    --risk-moderate-ink: 180 83 9;
+    --risk-high: 234 88 12;
+    --risk-high-ink: 194 65 12;
+    --risk-critical: 220 38 38;
+    --risk-critical-ink: 185 28 28;
+    color-scheme: light;
+  }
+  .dark {
+    --canvas: 9 14 24;
+    --surface: 17 24 39;
+    --surface-2: 26 35 52;
+    --line: 39 50 70;
+    --ink: 236 241 247;
+    --ink-2: 196 205 218;
+    --muted: 140 152 170;
+    --primary: 226 232 240;
+    --primary-fg: 15 42 74;
+    --sidebar: 12 19 33;
+    --accent-ink: 45 212 191;
+    --info-ink: 147 197 253;
+    --risk-low-ink: 74 222 128;
+    --risk-moderate-ink: 251 191 36;
+    --risk-high-ink: 251 146 60;
+    --risk-critical-ink: 248 113 113;
+    color-scheme: dark;
+  }
+}
+
+@theme {
+  --color-canvas: rgb(var(--canvas));
+  --color-surface: rgb(var(--surface));
+  --color-surface-2: rgb(var(--surface-2));
+  --color-line: rgb(var(--line));
+  --color-ink: rgb(var(--ink));
+  --color-ink-2: rgb(var(--ink-2));
+  --color-muted: rgb(var(--muted));
+  --color-primary: rgb(var(--primary));
+  --color-primary-fg: rgb(var(--primary-fg));
+  --color-navy: #0F2A4A;
+  --color-sidebar: rgb(var(--sidebar));
+  --color-accent: rgb(var(--accent));
+  --color-accent-ink: rgb(var(--accent-ink));
+  --color-info: rgb(var(--info));
+  --color-info-ink: rgb(var(--info-ink));
+  --color-risk-low: rgb(var(--risk-low));
+  --color-risk-low-ink: rgb(var(--risk-low-ink));
+  --color-risk-moderate: rgb(var(--risk-moderate));
+  --color-risk-moderate-ink: rgb(var(--risk-moderate-ink));
+  --color-risk-high: rgb(var(--risk-high));
+  --color-risk-high-ink: rgb(var(--risk-high-ink));
+  --color-risk-critical: rgb(var(--risk-critical));
+  --color-risk-critical-ink: rgb(var(--risk-critical-ink));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: rgb(var(--canvas));
+  color: rgb(var(--ink));
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  background: rgb(var(--surface-2));
+}
+
+.leaflet-tooltip {
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid rgb(var(--line));
+  box-shadow: 0 6px 16px -6px rgb(15 23 42 / 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

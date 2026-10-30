@@ -1,0 +1,6 @@
+{
+  "name": "DisruptionIQ",
+  "description": "Logistics and supply chain disruption management platform - from delivery delays to recovery plans.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
