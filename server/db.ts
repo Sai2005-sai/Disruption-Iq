@@ -175,7 +175,15 @@ export function initDatabase() {
       notes TEXT,
       photo_count INTEGER NOT NULL,
       outcome TEXT NOT NULL,
-      submitted_at TEXT NOT NULL
+      submitted_at TEXT NOT NULL,
+      agent_name TEXT,
+      customer_name TEXT,
+      area TEXT,
+      admin_solution TEXT,
+      solution_status TEXT DEFAULT 'Pending Review',
+      forwarded_at TEXT,
+      forwarded_by TEXT,
+      revised_eta TEXT
     );
 
     CREATE TABLE IF NOT EXISTS complaints (
@@ -211,10 +219,43 @@ export function initDatabase() {
     );
   `);
 
-  // Migrate existing complaints columns if not present
+  // Migrate existing complaints and agent_tickets columns
   try { db.exec('ALTER TABLE complaints ADD COLUMN admin_reply TEXT'); } catch {}
   try { db.exec('ALTER TABLE complaints ADD COLUMN replied_at TEXT'); } catch {}
+  try { db.exec('ALTER TABLE complaints ADD COLUMN replied_by TEXT'); } catch {}
+
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN agent_name TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN customer_name TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN area TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN admin_solution TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN solution_status TEXT DEFAULT "Pending Review"'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN forwarded_at TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN forwarded_by TEXT'); } catch {}
+  try { db.exec('ALTER TABLE agent_tickets ADD COLUMN revised_eta TEXT'); } catch {}
+
   seedInitialData();
+
+  // Ensure default agent tickets exist
+  const ticketCount = (db.prepare('SELECT count(*) as count FROM agent_tickets').get() as any).count;
+  if (ticketCount === 0) {
+    db.prepare(`
+      INSERT OR IGNORE INTO agent_tickets (id, order_id, reason, delay_minutes, notes, photo_count, outcome, submitted_at, agent_name, customer_name, area, solution_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'TKT-4469',
+      'ORD-10482',
+      'Severe traffic / Road closure at Guindy',
+      45,
+      'Road repair diversions on Mount Road. Vehicles stopped near Kathipara junction.',
+      1,
+      'Escalated',
+      '29 Oct, 08:27',
+      'Ravi Kumar',
+      'Sundaram Motors',
+      'Ambattur Industrial Estate',
+      'Pending Review'
+    );
+  }
 
   // Ensure default customer notices exist
   const insertNotice = db.prepare(`

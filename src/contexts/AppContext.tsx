@@ -77,8 +77,9 @@ export const guidedSteps: GuidedStep[] = [
 
 import { PortalCredential, portalCredentials } from '../data/authCredentials';
 
-import { Complaint, CustomerNotice } from '../types/domain';
+import { Complaint, CustomerNotice, AgentTicket, AiTicketSolution } from '../types/domain';
 import { seedComplaints, customerNotices as seedCustomerNotices } from '../data/customer';
+import { recentTickets as seedAgentTickets } from '../data/deliveries';
 
 interface AppContextValue {
   isAuthenticated: boolean;
@@ -106,6 +107,22 @@ interface AppContextValue {
   customerNotices: CustomerNotice[];
   markCustomerNoticeRead: (id: string) => Promise<void>;
   markAllCustomerNoticesRead: () => Promise<void>;
+  agentTickets: AgentTicket[];
+  submitAgentTicket: (ticket: {
+    orderId: string;
+    reason: string;
+    delayMinutes: number;
+    notes: string;
+    photoCount: number;
+    isMinor: boolean;
+    hasSafetyRisk: boolean;
+  }) => Promise<AgentTicket>;
+  solveAgentDelayWithAi: (ticketId: string, orderId?: string) => Promise<AiTicketSolution>;
+  forwardAgentTicketSolution: (ticketId: string, payload: {
+    solution: string;
+    revisedEta: string;
+    customerExplanation: string;
+  }) => Promise<void>;
   workflow: Workflow;
   selectOption: (option: RecoveryOption) => Promise<void>;
   decideStep: (decision: WorkflowDecision, comment: string, change?: { quantity: number; dispatchMode: string }) => Promise<{ success: boolean; error?: string }>;
@@ -178,6 +195,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [audit, setAudit] = useState<AuditEntry[]>(seedAudit);
   const [complaints, setComplaints] = useState<Complaint[]>(seedComplaints);
   const [customerNotices, setCustomerNotices] = useState<CustomerNotice[]>(seedCustomerNotices);
+  const [agentTickets, setAgentTickets] = useState<AgentTicket[]>(seedAgentTickets);
   const [workflow, setWorkflow] = useState<Workflow>(emptyWorkflow);
 
   const user = roleMeta[role].user;
@@ -220,6 +238,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         if (data.customerNotices && data.customerNotices.length > 0) {
           setCustomerNotices(data.customerNotices);
+        }
+        if (data.agentTickets && data.agentTickets.length > 0) {
+          setAgentTickets(data.agentTickets);
         }
         if (data.workflow) {
           setWorkflow(data.workflow);
@@ -616,6 +637,116 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  const submitAgentTicket = useCallback(
+    async (ticketData: {
+      orderId: string;
+      reason: string;
+      delayMinutes: number;
+      notes: string;
+      photoCount: number;
+      isMinor: boolean;
+      hasSafetyRisk: boolean;
+    }): Promise<AgentTicket> => {
+      try {
+        const res = await fetch('/api/agent/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...ticketData,
+            agentName: user.name
+          })
+        });
+        if (res.ok) {
+          const newTicket: AgentTicket = await res.json();
+          setAgentTickets((prev) => [newTicket, ...prev.filter((t) => t.id !== newTicket.id)]);
+          await reloadStateFromBackend();
+          return newTicket;
+        }
+      } catch (err) {
+        console.warn('Failed to submit agent ticket to backend, falling back locally', err);
+      }
+
+      const fallbackTicket: AgentTicket = {
+        id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+        orderId: ticketData.orderId,
+        customerName: 'Customer',
+        area: 'En Route',
+        reason: ticketData.reason,
+        delayMinutes: ticketData.delayMinutes,
+        notes: ticketData.notes,
+        submitted: 'Just now',
+        outcome: ticketData.isMinor ? 'Resolved' : 'Escalated',
+        time: 'Just now',
+        status: 'Open',
+        photoCount: ticketData.photoCount,
+        agentName: user.name,
+        solutionStatus: 'Pending Review'
+      };
+      setAgentTickets((prev) => [fallbackTicket, ...prev]);
+      return fallbackTicket;
+    },
+    [user.name, reloadStateFromBackend]
+  );
+
+  const solveAgentDelayWithAi = useCallback(
+    async (ticketId: string, orderId?: string): Promise<AiTicketSolution> => {
+      const res = await fetch('/api/ai/solve-agent-delay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, orderId })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to generate dynamic AI solution');
+      }
+      return await res.json();
+    },
+    []
+  );
+
+  const forwardAgentTicketSolution = useCallback(
+    async (
+      ticketId: string,
+      payload: { solution: string; revisedEta: string; customerExplanation: string }
+    ) => {
+      const res = await fetch(`/api/agent/tickets/${ticketId}/forward-solution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          solution: payload.solution,
+          revisedEta: payload.revisedEta,
+          customerExplanation: payload.customerExplanation,
+          adminName: user.name
+        })
+      });
+
+      if (res.ok) {
+        const updatedTicket: AgentTicket = await res.json();
+        setAgentTickets((prev) =>
+          prev.map((t) => (t.id === ticketId ? updatedTicket : t))
+        );
+      } else {
+        setAgentTickets((prev) =>
+          prev.map((t) =>
+            t.id === ticketId
+              ? {
+                  ...t,
+                  adminSolution: payload.solution,
+                  solutionStatus: 'Forwarded to Agent',
+                  forwardedAt: nowStamp(),
+                  forwardedBy: user.name,
+                  revisedEta: payload.revisedEta
+                }
+              : t
+          )
+        );
+      }
+
+      await reloadStateFromBackend();
+    },
+    [user.name, reloadStateFromBackend]
+  );
+
   const value = useMemo<AppContextValue>(
     () => ({
       isAuthenticated,
@@ -643,6 +774,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       customerNotices,
       markCustomerNoticeRead,
       markAllCustomerNoticesRead,
+      agentTickets,
+      submitAgentTicket,
+      solveAgentDelayWithAi,
+      forwardAgentTicketSolution,
       workflow,
       selectOption,
       decideStep,
@@ -674,6 +809,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       customerNotices,
       markCustomerNoticeRead,
       markAllCustomerNoticesRead,
+      agentTickets,
+      submitAgentTicket,
+      solveAgentDelayWithAi,
+      forwardAgentTicketSolution,
       workflow,
       selectOption,
       decideStep,

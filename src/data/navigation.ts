@@ -33,8 +33,8 @@ export const navGroups: {label: string;items: NavItem[];}[] = [
   { label: 'Recovery options', path: '/recovery', icon: GitCompareIcon },
   { label: 'Approvals', path: '/approvals', icon: StampIcon },
   { label: 'Warehouses', path: '/warehouses', icon: WarehouseIcon },
+  { label: 'Driver delays & AI', path: '/admin?tab=agent-delays', icon: FileWarningIcon },
   { label: 'Customer complaints', path: '/admin?tab=complaints', icon: MessageSquareIcon }]
-
 },
 {
   label: 'Field',

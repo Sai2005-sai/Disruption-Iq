@@ -74,6 +74,26 @@ app.get('/api/state', (_req: Request, res: Response) => {
     const customerNotices = db.prepare('SELECT id, kind, title, body, time, (unread == 1) as unread, complaint_id as complaintId FROM customer_notices ORDER BY rowid DESC').all();
     const recentWebhooks = db.prepare('SELECT * FROM carrier_webhooks ORDER BY id DESC LIMIT 20').all();
 
+    const agentTicketsRaw = db.prepare('SELECT * FROM agent_tickets ORDER BY rowid DESC').all() as any[];
+    const agentTickets = agentTicketsRaw.map((t) => ({
+      id: t.id,
+      orderId: t.order_id,
+      reason: t.reason,
+      delayMinutes: t.delay_minutes,
+      notes: t.notes,
+      photoCount: t.photo_count,
+      outcome: t.outcome,
+      submitted: t.submitted_at,
+      agentName: t.agent_name || 'Ravi Kumar',
+      customerName: t.customer_name || 'Sundaram Motors',
+      area: t.area || 'Ambattur, Chennai',
+      adminSolution: t.admin_solution || undefined,
+      solutionStatus: t.solution_status || 'Pending Review',
+      forwardedAt: t.forwarded_at || undefined,
+      forwardedBy: t.forwarded_by || undefined,
+      revisedEta: t.revised_eta || undefined
+    }));
+
     // Parse JSON fields
     const orders = ordersRaw.map((o) => ({
       ...o,
@@ -128,6 +148,7 @@ app.get('/api/state', (_req: Request, res: Response) => {
       users,
       complaints,
       customerNotices,
+      agentTickets,
       recentWebhooks,
       workflow
     });
@@ -945,10 +966,28 @@ app.post('/api/agent/tickets', (req: Request, res: Response) => {
   const autoResolved = isMinorReason && isShortDelay && hasPhoto && isSafe;
   const outcome = autoResolved ? 'Resolved' : 'Escalated';
 
+  // Find linked order information
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  const customerName = order?.customer || 'Sundaram Motors';
+  const area = order?.area || 'Ambattur, Chennai';
+
   db.prepare(`
-    INSERT INTO agent_tickets (id, order_id, reason, delay_minutes, notes, photo_count, outcome, submitted_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(ticketId, orderId, reason, delayMinutes || 45, notes || '', photoCount || 0, outcome, timeStr);
+    INSERT INTO agent_tickets (id, order_id, reason, delay_minutes, notes, photo_count, outcome, submitted_at, agent_name, customer_name, area, solution_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    ticketId,
+    orderId,
+    reason,
+    delayMinutes || 45,
+    notes || '',
+    photoCount || 0,
+    outcome,
+    timeStr,
+    user || 'Ravi Kumar',
+    customerName,
+    area,
+    'Pending Review'
+  );
 
   if (autoResolved) {
     db.prepare(`
@@ -966,11 +1005,28 @@ app.post('/api/agent/tickets', (req: Request, res: Response) => {
     user || 'Ravi Kumar',
     'Delivery Agent',
     undefined,
-    outcome === 'Resolved' ? 'Auto-resolved under MIP-04' : 'Escalated to Operations Analyst'
+    outcome === 'Resolved' ? 'Auto-resolved under MIP-04' : 'Escalated to Partner Admin'
   );
 
+  const ticket = {
+    id: ticketId,
+    orderId,
+    reason,
+    delayMinutes: delayMinutes || 45,
+    notes: notes || '',
+    photoCount: photoCount || 0,
+    outcome,
+    submitted: timeStr,
+    agentName: user || 'Ravi Kumar',
+    customerName,
+    area,
+    solutionStatus: 'Pending Review'
+  };
+
   res.json({
+    success: true,
     ticketId,
+    ticket,
     outcome,
     autoResolved,
     checks: {
@@ -978,6 +1034,205 @@ app.post('/api/agent/tickets', (req: Request, res: Response) => {
       isShortDelay,
       hasPhoto,
       isSafe
+    }
+  });
+});
+
+// GET all agent delay tickets for Admin & Agent views
+app.get('/api/agent/tickets', (_req: Request, res: Response) => {
+  const rows = db.prepare('SELECT * FROM agent_tickets ORDER BY rowid DESC').all() as any[];
+  const tickets = rows.map((t) => ({
+    id: t.id,
+    orderId: t.order_id,
+    reason: t.reason,
+    delayMinutes: t.delay_minutes,
+    notes: t.notes,
+    photoCount: t.photo_count,
+    outcome: t.outcome,
+    submitted: t.submitted_at,
+    agentName: t.agent_name || 'Ravi Kumar',
+    customerName: t.customer_name || 'Sundaram Motors',
+    area: t.area || 'Ambattur, Chennai',
+    adminSolution: t.admin_solution || undefined,
+    solutionStatus: t.solution_status || 'Pending Review',
+    forwardedAt: t.forwarded_at || undefined,
+    forwardedBy: t.forwarded_by || undefined,
+    revisedEta: t.revised_eta || undefined
+  }));
+  res.json({ tickets });
+});
+
+// Dynamic AI Solution for Agent Reported Delays using Gemini API
+app.post('/api/ai/solve-agent-delay', async (req: Request, res: Response) => {
+  try {
+    const { ticketId, orderId } = req.body;
+    const ticket = db.prepare('SELECT * FROM agent_tickets WHERE id = ?').get(ticketId) as any;
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId || ticket?.order_id) as any;
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.json({
+        ticketId,
+        orderId: order?.id || ticket.order_id,
+        driverDirective: `Take Inner Ring Road via Kathipara junction exit 3 to avoid the blocked Mount Road flyover. Re-approach Ambattur plant through bypass road.`,
+        revisedEta: `Today, by ${new Date(Date.now() + (ticket.delay_minutes + 15) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        customerExplanation: `Your delivery agent encountered traffic diversions on the main corridor. SwiftLane operations has rerouted the vehicle via the Western arterial bypass to minimize delays.`,
+        actionPlan: [
+          'Driver to take Kathipara bypass corridor to circumvent primary roadblock',
+          'Ambattur security gate notified of revised delivery van arrival window',
+          'Customer receiving desk updated with active driver tracking link'
+        ],
+        riskMitigation: 'Avoids 45-minute congestion standstill and prevents plant assembly line stoppage.',
+        source: 'Deterministic supply chain rules engine'
+      });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    const prompt = `You are the lead supply chain intelligence and dispatch operations officer at SwiftLane Logistics.
+A field delivery driver has encountered an active delay while transporting an order to an enterprise customer.
+
+Order Information:
+- Order Number: ${order?.id || ticket.order_id}
+- Customer Name: ${order?.customer || ticket.customer_name || 'Sundaram Motors'}
+- Delivery Location: ${order?.area || ticket.area || 'Ambattur, Chennai'}
+- Original Delivery Window: ${order?.original_eta || 'Thu, 29 Oct – by 6:00 PM'}
+- Current SLA Status: ${order?.status || 'Delayed'}
+- Priority Level: ${order?.priority || 'P1 Critical'}
+
+Driver Field Report:
+- Driver: ${ticket.agent_name || 'Ravi Kumar'}
+- Delay Cause: ${ticket.reason}
+- Estimated Delay: ${ticket.delay_minutes} minutes
+- Driver Notes: ${ticket.notes || 'None provided'}
+
+Generate a professional, realistic operational recovery solution as a JSON object:
+1. "driverDirective": Specific step-by-step driving/procedural commands for the driver (e.g. specific bypasses, bypass checkpoints, OTP authorization, gate pass procedures, or split dispatch).
+2. "revisedEta": Concrete revised delivery window (e.g. "Today, 11:30 AM – 12:00 PM" accounting for the ${ticket.delay_minutes}m delay).
+3. "customerExplanation": Courteous, transparent 2-sentence explanation for the end customer explaining what happened and how SwiftLane is resolving it.
+4. "actionPlan": Array of 3 tactical actions executed by dispatch and the driver.
+5. "riskMitigation": Explanation of how this solution prevents SLA penalty or factory stoppage.
+
+Respond ONLY with valid JSON.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json({
+      ticketId,
+      orderId: order?.id || ticket.order_id,
+      driverDirective: parsed.driverDirective || 'Take Kathipara bypass and proceed directly to Ambattur gate 2.',
+      revisedEta: parsed.revisedEta || `Today, +${ticket.delay_minutes} min`,
+      customerExplanation: parsed.customerExplanation || 'Delivery driver rerouted around local traffic. Updated ETA applied.',
+      actionPlan: parsed.actionPlan || [
+        'Reroute driver via arterial bypass',
+        'Notify destination security gate',
+        'Monitor real-time GPS check-in'
+      ],
+      riskMitigation: parsed.riskMitigation || 'Maintains plant assembly line schedule within acceptable SLA buffer.',
+      source: 'Gemini 3.8 Flash'
+    });
+  } catch (err: any) {
+    console.error('Gemini delay solution error:', err);
+    res.json({
+      ticketId: req.body.ticketId,
+      orderId: req.body.orderId,
+      driverDirective: 'Proceed via Western arterial bypass to circumvent corridor delay. Coordinate with Ambattur receiving dock.',
+      revisedEta: 'Today, +45 min revised window',
+      customerExplanation: 'Your driver encountered unexpected road maintenance. SwiftLane dispatch has authorized an alternate bypass to expedite delivery.',
+      actionPlan: [
+        'Reroute via Western bypass corridor',
+        'Alert dock receiving supervisor',
+        'Prioritize gate entry on arrival'
+      ],
+      riskMitigation: 'Maintains delivery within contractual buffer period.',
+      source: 'Fallback logistics rules engine'
+    });
+  }
+});
+
+// Forward AI Solution to Delivery Agent & Update Customer Portal Order Details
+app.post('/api/agent/tickets/:id/forward-solution', (req: Request, res: Response) => {
+  const ticketId = req.params.id;
+  const { solution, revisedEta, customerExplanation, user = 'Meera Iyer' } = req.body;
+
+  const ticket = db.prepare('SELECT * FROM agent_tickets WHERE id = ?').get(ticketId) as any;
+  if (!ticket) {
+    return res.status(404).json({ error: 'Agent ticket not found' });
+  }
+
+  const now = new Date();
+  const timeStamp = `Today, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const orderId = ticket.order_id;
+
+  // 1. Update ticket in agent_tickets table
+  db.prepare(`
+    UPDATE agent_tickets
+    SET admin_solution = ?,
+        solution_status = 'Forwarded to Agent',
+        forwarded_at = ?,
+        forwarded_by = ?,
+        revised_eta = ?
+    WHERE id = ?
+  `).run(solution, timeStamp, user, revisedEta || 'Today, revised', ticketId);
+
+  // 2. Update orders table so Customer Portal reflects the updated ETA & explanation!
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+  if (order) {
+    db.prepare(`
+      UPDATE orders
+      SET status = 'Delayed',
+          revised_eta = ?,
+          explanation = ?
+      WHERE id = ?
+    `).run(revisedEta || 'Today, revised', customerExplanation || solution, orderId);
+  }
+
+  // 3. Dispatch customer notification into customer_notices table
+  const noticeId = `CN-${Date.now()}`;
+  const noticeTitle = `Order ${orderId} Delay Update & Recovery Solution`;
+  const noticeBody = `SwiftLane Operations (${user}): "${customerExplanation || solution}". Revised arrival window: ${revisedEta || 'Updated'}.`;
+
+  db.prepare(`
+    INSERT INTO customer_notices (id, kind, title, body, time, unread, complaint_id)
+    VALUES (?, 'ETA change', ?, ?, ?, 1, ?)
+  `).run(noticeId, noticeTitle, noticeBody, timeStamp, ticketId);
+
+  // 4. Log in Audit Trail
+  logAudit(
+    'Modification',
+    ticketId,
+    `Admin forwarded AI solution to driver (${ticket.agent_name || 'Ravi Kumar'}) and updated customer order ${orderId} ETA to "${revisedEta}": "${solution.slice(0, 80)}"`,
+    user,
+    'Delivery Partner Admin',
+    'Pending Review',
+    'Forwarded to Agent & Customer'
+  );
+
+  res.json({
+    success: true,
+    ticketId,
+    orderId,
+    solutionStatus: 'Forwarded to Agent',
+    adminSolution: solution,
+    revisedEta,
+    customerExplanation,
+    forwardedAt: timeStamp,
+    forwardedBy: user,
+    notice: {
+      id: noticeId,
+      title: noticeTitle,
+      body: noticeBody,
+      time: timeStamp
     }
   });
 });
@@ -1085,7 +1340,7 @@ Generate a JSON object with:
 Respond ONLY with valid JSON.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json'

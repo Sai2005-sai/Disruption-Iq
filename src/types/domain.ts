@@ -39,7 +39,31 @@ export interface AgentTicket {
   orderId: string;
   reason: string;
   submitted: string;
+  time?: string;
+  status?: string;
   outcome: 'Resolved' | 'Escalated' | 'In review';
+  delayMinutes?: number;
+  notes?: string;
+  photoCount?: number;
+  agentName?: string;
+  customerName?: string;
+  area?: string;
+  adminSolution?: string;
+  solutionStatus?: 'Pending Review' | 'AI Solved' | 'Forwarded to Agent';
+  forwardedAt?: string;
+  forwardedBy?: string;
+  revisedEta?: string;
+}
+
+export interface AiTicketSolution {
+  ticketId: string;
+  orderId: string;
+  driverDirective: string;
+  revisedEta: string;
+  customerExplanation: string;
+  actionPlan: string[];
+  riskMitigation: string;
+  source: string;
 }
 
 export type AlertSource = 'Supplier' | 'Carrier Webhook' | 'Agent Ticket';

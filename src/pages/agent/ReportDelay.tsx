@@ -26,7 +26,7 @@ interface ActiveTicket {
 
 export function ReportDelay() {
   const [params] = useSearchParams();
-  const { logAudit } = useApp();
+  const { logAudit, agentTickets, submitAgentTicket } = useApp();
   const [orderId, setOrderId] = useState(params.get('order') ?? 'ORD-10482');
   const [reasonId, setReasonId] = useState('');
   const [custom, setCustom] = useState('');
@@ -36,7 +36,7 @@ export function ReportDelay() {
   const [dragging, setDragging] = useState(false);
   const [errors, setErrors] = useState<{reason?: string;custom?: string;}>({});
   const [ticket, setTicket] = useState<ActiveTicket | null>(null);
-  const [tickets, setTickets] = useState<AgentTicket[]>(recentTickets);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const timers = useRef<number[]>([]);
 
@@ -79,7 +79,7 @@ export function ReportDelay() {
     return p.filter((_, idx) => idx !== i);
   });
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const next: typeof errors = {};
     if (!reasonId) next.reason = 'Choose the reason for this delay.';
@@ -87,21 +87,47 @@ export function ReportDelay() {
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    const id = `TKT-${4472 + tickets.length - recentTickets.length}`;
-    const outcome = allPass ? 'Resolved' : 'Escalated';
+    setIsSubmitting(true);
     const reasonLabel = isOther ? `Other: ${custom.trim()}` : reason?.label ?? '';
-    setTicket({ id, stage: 1, outcome });
-    toast.success(`${id} submitted`, { description: `${orderId} · ${reasonLabel}` });
-    timers.current.push(window.setTimeout(() => setTicket((t) => t ? { ...t, stage: 2 } : t), 1100));
-    timers.current.push(
-      window.setTimeout(() => {
-        setTicket((t) => t ? { ...t, stage: 3 } : t);
-        setTickets((list) => [{ id, orderId, reason: reasonLabel, submitted: 'Just now', outcome }, ...list]);
-        logAudit({ action: 'Report', target: id, reason: `${orderId} · ${reasonLabel}`, after: outcome === 'Resolved' ? 'Auto-resolved under MIP-04' : 'Escalated to Operations Analyst' });
-        if (outcome === 'Resolved') toast.success(`${id} auto-resolved`, { description: 'Customer notified of revised ETA' });else
-        toast.warning(`${id} escalated`, { description: 'An Operations Analyst will review within 15 min' });
-      }, 2300)
-    );
+    const outcome = allPass ? 'Resolved' : 'Escalated';
+
+    try {
+      const createdTicket = await submitAgentTicket({
+        orderId,
+        reason: reasonLabel,
+        delayMinutes: minutes,
+        notes: notes.trim(),
+        photoCount: photos.length,
+        isMinor: !!reason?.minor && minutes <= 60,
+        hasSafetyRisk: !!reason?.safety
+      });
+
+      const id = createdTicket.id;
+      setTicket({ id, stage: 1, outcome });
+      toast.success(`${id} submitted to Delivery Partner Admin`, {
+        description: `${orderId} · ${reasonLabel}`
+      });
+
+      timers.current.push(window.setTimeout(() => setTicket((t) => t ? { ...t, stage: 2 } : t), 1000));
+      timers.current.push(
+        window.setTimeout(() => {
+          setTicket((t) => t ? { ...t, stage: 3 } : t);
+          logAudit({
+            action: 'Report',
+            target: id,
+            reason: `${orderId} · ${reasonLabel} (${minutes}m)`,
+            after: 'Reported to Admin for Gemini AI Solution & Customer dispatch'
+          });
+          toast.info(`Ticket ${id} escalated to Delivery Partner Admin`, {
+            description: 'Partner admin can now generate dynamic AI resolution and dispatch updated ETA to customer.'
+          });
+        }, 2000)
+      );
+    } catch (err: any) {
+      toast.error('Could not submit ticket', { description: err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const stages = ticket ?
@@ -282,21 +308,45 @@ export function ReportDelay() {
               </div>
             }
             <div className="border-t border-line">
-              <p className="px-5 pb-1 pt-4 text-xs font-medium text-muted">Recent tickets</p>
+              <p className="px-5 pb-1 pt-4 text-xs font-medium text-muted">Recent driver tickets & admin solutions</p>
               <ul className="divide-y divide-line">
-                {tickets.slice(0, 4).map((t) =>
-                <li key={t.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm text-ink">
-                        {t.id} · <span className="text-ink-2">{t.reason}</span>
-                      </p>
-                      <p className="text-xs text-muted">
-                        {t.orderId} · {t.submitted}
-                      </p>
+                {agentTickets.slice(0, 6).map((t) => (
+                  <li key={t.id} className="space-y-2 px-5 py-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">
+                          {t.id} · <span className="font-normal text-ink-2">{t.reason}</span>
+                        </p>
+                        <p className="text-xs text-muted">
+                          {t.orderId} · {t.time || t.submitted || 'Just now'} {t.delayMinutes ? `· +${t.delayMinutes} min` : ''}
+                        </p>
+                      </div>
+                      <StatusChip
+                        tone={
+                          t.solutionStatus === 'Forwarded to Agent'
+                            ? 'success'
+                            : t.solutionStatus === 'Pending Review'
+                            ? 'warning'
+                            : t.outcome === 'Resolved'
+                            ? 'success'
+                            : 'info'
+                        }
+                      >
+                        {t.solutionStatus || t.outcome || t.status || 'Active'}
+                      </StatusChip>
                     </div>
-                    <StatusChip tone={t.outcome === 'Resolved' ? 'success' : t.outcome === 'Escalated' ? 'orange' : 'info'}>{t.outcome}</StatusChip>
+
+                    {t.solutionStatus === 'Forwarded to Agent' && t.adminSolution && (
+                      <div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs text-ink">
+                        <div className="flex items-center justify-between font-semibold text-accent-ink pb-1">
+                          <span>⚡ Admin Recovery Directive ({t.forwardedBy || 'Delivery Partner Admin'}):</span>
+                          {t.revisedEta && <span className="text-[11px] bg-accent/20 px-1.5 py-0.5 rounded">Revised ETA: {t.revisedEta}</span>}
+                        </div>
+                        <p className="whitespace-pre-line text-ink leading-relaxed">{t.adminSolution}</p>
+                      </div>
+                    )}
                   </li>
-                )}
+                ))}
               </ul>
             </div>
           </Card>

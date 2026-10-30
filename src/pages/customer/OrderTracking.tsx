@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SearchIcon, HeadsetIcon, BadgeCheckIcon, PackageSearchIcon, CheckIcon, CircleAlertIcon } from 'lucide-react';
 import { customerOrders } from '../../data/customer';
-import { CustomerOrder } from '../../types/domain';
+import { CustomerOrder, AgentTicket } from '../../types/domain';
 import { useApp } from '../../contexts/AppContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -18,7 +18,7 @@ type LookupState = {status: 'loading';} | {status: 'found';order: CustomerOrder;
 
 export function OrderTracking() {
   const navigate = useNavigate();
-  const { workflow } = useApp();
+  const { workflow, agentTickets } = useApp();
   const [query, setQuery] = useState('ORD-10482');
   const [state, setState] = useState<LookupState>({ status: 'loading' });
 
@@ -27,7 +27,7 @@ export function OrderTracking() {
     setTimeout(() => {
       const order = customerOrders.find((o) => o.id.toLowerCase() === id.trim().toLowerCase());
       setState(order ? { status: 'found', order } : { status: 'missing', query: id.trim() });
-    }, 700);
+    }, 400);
   };
 
   useEffect(() => {
@@ -35,6 +35,9 @@ export function OrderTracking() {
   }, []);
 
   const executed = workflow.state === 'executed';
+  const matchedTicket = state.status === 'found'
+    ? agentTickets.find((t) => t.orderId.toLowerCase() === state.order.id.toLowerCase() && t.solutionStatus === 'Forwarded to Agent')
+    : undefined;
 
   return (
     <>
@@ -83,17 +86,45 @@ export function OrderTracking() {
         </Card>
       }
 
-      {state.status === 'found' && <OrderResult order={state.order} executed={executed} onContact={() => navigate('/customer/care?tab=chat')} />}
+      {state.status === 'found' && (
+        <OrderResult
+          order={state.order}
+          executed={executed}
+          agentTicket={matchedTicket}
+          onContact={() => navigate('/customer/care?tab=chat')}
+        />
+      )}
     </>);
 
 }
 
-function OrderResult({ order, executed, onContact }: {order: CustomerOrder;executed: boolean;onContact: () => void;}) {
-  const isDelayed = order.status === 'Delayed';
-  const revised = isDelayed && executed ? 'Fri, 30 Oct · 2 PM – 5 PM' : order.revisedEta;
-  const timeline = order.timeline.map((s) =>
-  executed && isDelayed && s.label === 'Replacement stock arranged' ? { ...s, state: 'done' as const, time: '29 Oct, 11:30' } : executed && isDelayed && s.label === 'Out for delivery' ? { ...s, state: 'current' as const, time: 'Expected 30 Oct' } : s
-  );
+function OrderResult({
+  order,
+  executed,
+  agentTicket,
+  onContact
+}: {
+  order: CustomerOrder;
+  executed: boolean;
+  agentTicket?: AgentTicket;
+  onContact: () => void;
+}) {
+  const isDelayed = order.status === 'Delayed' || !!agentTicket;
+  const revised = agentTicket?.revisedEta ?? (isDelayed && executed ? 'Fri, 30 Oct · 2 PM – 5 PM' : order.revisedEta);
+  const explanation = agentTicket
+    ? `En-route field delay reported: ${agentTicket.reason}. Operations recovery action taken: ${agentTicket.adminSolution}`
+    : order.explanation;
+
+  const timeline = order.timeline.map((s) => {
+    if (agentTicket && s.label === 'Out for delivery') {
+      return { ...s, state: 'current' as const, note: `In Transit · Revised ETA: ${agentTicket.revisedEta || 'Delayed'}` };
+    }
+    return executed && isDelayed && s.label === 'Replacement stock arranged'
+      ? { ...s, state: 'done' as const, time: '29 Oct, 11:30' }
+      : executed && isDelayed && s.label === 'Out for delivery'
+      ? { ...s, state: 'current' as const, time: 'Expected 30 Oct' }
+      : s;
+  });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -106,8 +137,8 @@ function OrderResult({ order, executed, onContact }: {order: CustomerOrder;execu
               </p>
               <p className="text-[15px] font-medium text-ink">{order.items}</p>
             </div>
-            <StatusChip tone={order.status === 'Delayed' ? 'warning' : 'success'} dot>
-              {order.status}
+            <StatusChip tone={isDelayed ? 'warning' : 'success'} dot>
+              {isDelayed ? 'Delayed' : order.status}
             </StatusChip>
           </div>
 
@@ -117,15 +148,27 @@ function OrderResult({ order, executed, onContact }: {order: CustomerOrder;execu
             {revised && <p className="mt-1 text-sm text-muted line-through">Originally {order.originalEta}</p>}
           </div>
 
-          {order.explanation &&
-          <div className="mt-5">
-              <h2 className="text-sm font-semibold text-ink">Why is my order late?</h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-2">{order.explanation}</p>
-              <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-risk-low-ink">
-                <BadgeCheckIcon className="h-4 w-4" aria-hidden /> {order.verifiedAt}
+          {agentTicket && (
+            <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-4 text-xs space-y-2">
+              <div className="flex items-center justify-between font-semibold text-accent-ink">
+                <span>⚡ Real-Time Transit Recovery Notice</span>
+                <span className="text-[11px] bg-accent/20 px-2 py-0.5 rounded">Forwarded by Partner Admin</span>
+              </div>
+              <p className="text-ink leading-relaxed">
+                {agentTicket.adminSolution}
               </p>
             </div>
-          }
+          )}
+
+          {explanation && (
+            <div className="mt-5">
+              <h2 className="text-sm font-semibold text-ink">Why is my order late?</h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink-2">{explanation}</p>
+              <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-risk-low-ink">
+                <BadgeCheckIcon className="h-4 w-4" aria-hidden /> Verified by Logistics Dispatch · Today
+              </p>
+            </div>
+          )}
         </Card>
 
         <Card className="p-5 lg:p-6">
