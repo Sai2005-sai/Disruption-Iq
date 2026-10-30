@@ -21,7 +21,7 @@ type Dialog = 'reject' | 'modify' | 'execute' | null;
 
 export function Approvals() {
   const navigate = useNavigate();
-  const { workflow, role, user, setRole, decideStep, executePlan, markStale, resetWorkflow } = useApp();
+  const { workflow, role, user, decideStep, executePlan, markStale, resetWorkflow } = useApp();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [comment, setComment] = useState('');
   const [commentError, setCommentError] = useState('');
@@ -176,18 +176,11 @@ export function Approvals() {
             !isMyStep ?
             <div className="mt-4 flex flex-col gap-3 rounded-lg bg-surface-2 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-ink-2">
-                    This step is waiting on <span className="font-medium text-ink">{roleMeta[current.role].label}</span>. You’re viewing as {roleMeta[role].label}.
+                    This step is waiting on <span className="font-medium text-ink">{roleMeta[current.role].label}</span>. You’re currently signed in as {roleMeta[role].label}.
                   </p>
-                  <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setRole(current.role);
-                  toast.success(`Now viewing as ${roleMeta[current.role].label}`);
-                }}>
-                
-                    Switch to {roleMeta[current.role].short}
-                  </Button>
+                  <span className="text-xs font-medium text-muted">
+                    Requires {roleMeta[current.role].label} sign-in
+                  </span>
                 </div> :
             null}
 

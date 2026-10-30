@@ -233,6 +233,14 @@ export function initDatabase() {
   try { db.exec('ALTER TABLE agent_tickets ADD COLUMN forwarded_by TEXT'); } catch {}
   try { db.exec('ALTER TABLE agent_tickets ADD COLUMN revised_eta TEXT'); } catch {}
 
+  // Migrate orders table columns for persistent AI solutions
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_solution_applied INTEGER DEFAULT 0'); } catch {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_action TEXT'); } catch {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_revised_eta TEXT'); } catch {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_customer_notice TEXT'); } catch {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_cost INTEGER'); } catch {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN ai_applied_at TEXT'); } catch {}
+
   seedInitialData();
 
   // Ensure default agent tickets exist

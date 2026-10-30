@@ -9,7 +9,7 @@ import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 
 export function RestrictedState({ path }: {path: string;}) {
-  const { role, setRole } = useApp();
+  const { role } = useApp();
   const navigate = useNavigate();
   const allowed = allowedRolesFor(path) ?? [];
   const suggested = allowed.find((r) => r !== 'admin') ?? allowed[0];
@@ -22,18 +22,15 @@ export function RestrictedState({ path }: {path: string;}) {
         body={`This screen is limited to: ${allowed.map((r) => roleMeta[r].label).join(', ')}. Role-based access is enforced on every screen and action.`}
         action={
         <div className="flex flex-wrap justify-center gap-2">
-            {suggested &&
-          <Button
-            onClick={() => {
-              setRole(suggested);
-              toast.success(`Now viewing as ${roleMeta[suggested].label}`);
-            }}>
-            
-                Switch to {roleMeta[suggested].label}
-              </Button>
-          }
-            <Button variant="secondary" onClick={() => navigate(roleMeta[role].home)}>
+            <Button onClick={() => navigate(roleMeta[role]?.home || '/')}>
               Go to my home
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                navigate('/login');
+              }}>
+              Switch account
             </Button>
           </div>
         } />

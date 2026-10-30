@@ -43,15 +43,25 @@ export function AdminAgentDelays() {
   const [editableCustomerMsg, setEditableCustomerMsg] = useState('');
 
   const filteredTickets = agentTickets.filter((t) => {
-    const q = search.toLowerCase();
+    if (!t) return false;
+    const q = search.trim().toLowerCase();
+    const id = (t.id || '').toLowerCase();
+    const orderId = (t.orderId || '').toLowerCase();
+    const customer = (t.customerName || '').toLowerCase();
+    const agent = (t.agentName || '').toLowerCase();
+    const area = (t.area || '').toLowerCase();
+    const reason = (t.reason || '').toLowerCase();
+    const notes = (t.notes || '').toLowerCase();
+
     const matchesSearch =
-      t.id.toLowerCase().includes(q) ||
-      t.orderId.toLowerCase().includes(q) ||
-      (t.customerName && t.customerName.toLowerCase().includes(q)) ||
-      (t.agentName && t.agentName.toLowerCase().includes(q)) ||
-      (t.area && t.area.toLowerCase().includes(q)) ||
-      t.reason.toLowerCase().includes(q) ||
-      (t.notes && t.notes.toLowerCase().includes(q));
+      !q ||
+      id.includes(q) ||
+      orderId.includes(q) ||
+      customer.includes(q) ||
+      agent.includes(q) ||
+      area.includes(q) ||
+      reason.includes(q) ||
+      notes.includes(q);
 
     const matchesStatus =
       filterStatus === 'all' ||
@@ -61,9 +71,9 @@ export function AdminAgentDelays() {
     return matchesSearch && matchesStatus;
   });
 
-  const pendingCount = agentTickets.filter((t) => t.solutionStatus !== 'Forwarded to Agent').length;
-  const forwardedCount = agentTickets.filter((t) => t.solutionStatus === 'Forwarded to Agent').length;
-  const totalDelayMinutes = agentTickets.reduce((acc, t) => acc + (t.delayMinutes || 0), 0);
+  const pendingCount = agentTickets.filter((t) => t && t.solutionStatus !== 'Forwarded to Agent').length;
+  const forwardedCount = agentTickets.filter((t) => t && t.solutionStatus === 'Forwarded to Agent').length;
+  const totalDelayMinutes = agentTickets.reduce((acc, t) => acc + (t?.delayMinutes || 0), 0);
   const avgDelay = agentTickets.length > 0 ? Math.round(totalDelayMinutes / agentTickets.length) : 0;
 
   const handleOpenAiModal = async (ticket: AgentTicket) => {

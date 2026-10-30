@@ -31,7 +31,7 @@ const steps: Complaint['status'][] = ['Submitted', 'In review', 'Resolved'];
 
 export function CustomerCare() {
   const [params, setParams] = useSearchParams();
-  const { complaints, submitComplaint, customerNotices, markCustomerNoticeRead, markAllCustomerNoticesRead } = useApp();
+  const { complaints, submitComplaint, customerNotices, markCustomerNoticeRead, markAllCustomerNoticesRead, orders } = useApp();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const tabParam = params.get('tab') ?? 'notifications';
   const tab = isDesktop && tabParam === 'chat' ? 'notifications' : tabParam;
@@ -177,8 +177,10 @@ export function CustomerCare() {
                         onChange={(e) => setOrderId(e.target.value)}
                         className={inputClass}
                       >
-                        {customerOrders.map((o) => (
-                          <option key={o.id}>{o.id}</option>
+                        {(orders && orders.length > 0 ? orders : customerOrders).map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.id} {o.customer ? `· ${o.customer}` : ''}
+                          </option>
                         ))}
                       </select>
                     </Field>

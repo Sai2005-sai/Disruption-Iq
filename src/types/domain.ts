@@ -262,3 +262,29 @@ export interface PlatformUser {
   status: 'Active' | 'Invited' | 'Suspended';
   lastActive: string;
 }
+
+export interface AiOrderRiskSolution {
+  orderId: string;
+  customer: string;
+  problemAnalysis: string;
+  recommendedAction: string;
+  alternativeFulfillment: string;
+  revisedSlaWindow: string;
+  customerNoticeDraft: string;
+  estimatedCost: number;
+  riskMitigation: string;
+  source: string;
+}
+
+export interface AiWarehouseReplenishment {
+  warehouseId: string;
+  warehouseName: string;
+  city: string;
+  stockAssessment: string;
+  recommendedDirectives: string[];
+  transferRoute: string;
+  etaHours: string;
+  estimatedCost: number;
+  riskReduction: string;
+  source: string;
+}

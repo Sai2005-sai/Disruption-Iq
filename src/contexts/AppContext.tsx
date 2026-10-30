@@ -77,7 +77,15 @@ export const guidedSteps: GuidedStep[] = [
 
 import { PortalCredential, portalCredentials } from '../data/authCredentials';
 
-import { Complaint, CustomerNotice, AgentTicket, AiTicketSolution } from '../types/domain';
+import {
+  Complaint,
+  CustomerNotice,
+  AgentTicket,
+  AiTicketSolution,
+  RiskOrder,
+  AiOrderRiskSolution,
+  AiWarehouseReplenishment
+} from '../types/domain';
 import { seedComplaints, customerNotices as seedCustomerNotices } from '../data/customer';
 import { recentTickets as seedAgentTickets } from '../data/deliveries';
 
@@ -123,6 +131,14 @@ interface AppContextValue {
     revisedEta: string;
     customerExplanation: string;
   }) => Promise<void>;
+  orders: any[];
+  warehouses: any[];
+  solveOrderRiskWithAi: (order: RiskOrder) => Promise<AiOrderRiskSolution>;
+  applyOrderAiSolution: (orderId: string, payload: { revisedEta: string; customerExplanation: string; actionTaken: string }) => Promise<any>;
+  solveWarehouseReplenishmentWithAi: (warehouseId: string) => Promise<AiWarehouseReplenishment>;
+  executeWarehouseReplenishment: (targetWarehouseId: string, sourceWarehouseId?: string, quantity?: number) => Promise<any>;
+  configureAiKey: (apiKey: string) => Promise<{ success: boolean; message: string; keyMasked?: string }>;
+  getAiKeyStatus: () => Promise<{ hasKey: boolean; keyMasked: string | null; provider: string }>;
   workflow: Workflow;
   selectOption: (option: RecoveryOption) => Promise<void>;
   decideStep: (decision: WorkflowDecision, comment: string, change?: { quantity: number; dispatchMode: string }) => Promise<{ success: boolean; error?: string }>;
@@ -196,6 +212,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [complaints, setComplaints] = useState<Complaint[]>(seedComplaints);
   const [customerNotices, setCustomerNotices] = useState<CustomerNotice[]>(seedCustomerNotices);
   const [agentTickets, setAgentTickets] = useState<AgentTicket[]>(seedAgentTickets);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [workflow, setWorkflow] = useState<Workflow>(emptyWorkflow);
 
   const user = roleMeta[role].user;
@@ -241,6 +259,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         if (data.agentTickets && data.agentTickets.length > 0) {
           setAgentTickets(data.agentTickets);
+        }
+        if (data.orders && data.orders.length > 0) {
+          setOrders(data.orders);
+        }
+        if (data.warehouses && data.warehouses.length > 0) {
+          setWarehouses(data.warehouses);
         }
         if (data.workflow) {
           setWorkflow(data.workflow);
@@ -716,14 +740,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           solution: payload.solution,
           revisedEta: payload.revisedEta,
           customerExplanation: payload.customerExplanation,
+          user: user.name,
           adminName: user.name
         })
       });
 
       if (res.ok) {
-        const updatedTicket: AgentTicket = await res.json();
+        const data = await res.json().catch(() => ({}));
+        const backendTicket: Partial<AgentTicket> = data.ticket || {};
         setAgentTickets((prev) =>
-          prev.map((t) => (t.id === ticketId ? updatedTicket : t))
+          prev.map((t) =>
+            t.id === ticketId
+              ? {
+                  ...t,
+                  ...backendTicket,
+                  adminSolution: payload.solution,
+                  solutionStatus: 'Forwarded to Agent',
+                  forwardedAt: data.forwardedAt || nowStamp(),
+                  forwardedBy: data.forwardedBy || user.name,
+                  revisedEta: payload.revisedEta
+                }
+              : t
+          )
         );
       } else {
         setAgentTickets((prev) =>
@@ -746,6 +784,111 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [user.name, reloadStateFromBackend]
   );
+
+  const solveOrderRiskWithAi = useCallback(
+    async (order: RiskOrder): Promise<AiOrderRiskSolution> => {
+      const res = await fetch('/api/ai/solve-order-risk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          customer: order.customer,
+          area: order.area,
+          quantity: order.quantity,
+          shortage: order.shortage,
+          priority: order.priority,
+          deadlineHours: order.deadlineHours,
+          deadlineLabel: order.deadlineLabel,
+          factors: order.factors
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to solve order risk with AI');
+      }
+      return await res.json();
+    },
+    []
+  );
+
+  const applyOrderAiSolution = useCallback(
+    async (
+      orderId: string,
+      payload: { revisedEta: string; customerExplanation: string; actionTaken: string }
+    ) => {
+      const res = await fetch(`/api/orders/${orderId}/apply-ai-solution`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          user: user.name
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to apply order AI solution');
+      }
+      const data = await res.json();
+      await reloadStateFromBackend();
+      return data;
+    },
+    [user.name, reloadStateFromBackend]
+  );
+
+  const solveWarehouseReplenishmentWithAi = useCallback(
+    async (warehouseId: string): Promise<AiWarehouseReplenishment> => {
+      const res = await fetch('/api/ai/warehouse-replenishment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ warehouseId })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to generate warehouse replenishment plan');
+      }
+      return await res.json();
+    },
+    []
+  );
+
+  const executeWarehouseReplenishment = useCallback(
+    async (targetWarehouseId: string, sourceWarehouseId = 'WH-BLR-02', quantity = 120) => {
+      const res = await fetch(`/api/warehouses/${targetWarehouseId}/execute-replenishment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceWarehouseId, quantity, user: user.name })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to execute warehouse replenishment');
+      }
+      const data = await res.json();
+      await reloadStateFromBackend();
+      return data;
+    },
+    [user.name, reloadStateFromBackend]
+  );
+
+  const configureAiKey = useCallback(async (apiKey: string) => {
+    const res = await fetch('/api/admin/config-ai-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to configure Gemini API key');
+    }
+    return await res.json();
+  }, []);
+
+  const getAiKeyStatus = useCallback(async () => {
+    const res = await fetch('/api/admin/config-ai-key');
+    if (!res.ok) {
+      return { hasKey: false, keyMasked: null, provider: 'Google Gemini' };
+    }
+    return await res.json();
+  }, []);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -778,6 +921,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       submitAgentTicket,
       solveAgentDelayWithAi,
       forwardAgentTicketSolution,
+      orders,
+      warehouses,
+      solveOrderRiskWithAi,
+      applyOrderAiSolution,
+      solveWarehouseReplenishmentWithAi,
+      executeWarehouseReplenishment,
+      configureAiKey,
+      getAiKeyStatus,
       workflow,
       selectOption,
       decideStep,
@@ -813,6 +964,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       submitAgentTicket,
       solveAgentDelayWithAi,
       forwardAgentTicketSolution,
+      orders,
+      warehouses,
+      solveOrderRiskWithAi,
+      applyOrderAiSolution,
+      solveWarehouseReplenishmentWithAi,
+      executeWarehouseReplenishment,
+      configureAiKey,
+      getAiKeyStatus,
       workflow,
       selectOption,
       decideStep,

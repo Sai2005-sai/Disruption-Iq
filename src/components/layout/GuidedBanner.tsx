@@ -27,7 +27,6 @@ export function GuidedBanner() {
     guidedStepIdx,
     setGuidedStepIdx,
     role,
-    setRole,
     runScenario,
     workflow
   } = useApp();
@@ -50,10 +49,6 @@ export function GuidedBanner() {
 
   const handleQuickAction = () => {
     navigate(currentStep.route);
-    if (!isCorrectRole) {
-      setRole(currentStep.roleNeeded);
-      toast.info(`Switched role to ${roleMeta[currentStep.roleNeeded].label} for this step.`);
-    }
   };
 
   const executeScenario = async (id: string, name: string) => {
@@ -178,17 +173,6 @@ export function GuidedBanner() {
                 <span className="font-medium text-ink">
                   {roleMeta[currentStep.roleNeeded].label}
                 </span>
-                {!isCorrectRole && (
-                  <button
-                    onClick={() => {
-                      setRole(currentStep.roleNeeded);
-                      toast.success(`Switched role to ${roleMeta[currentStep.roleNeeded].label}`);
-                    }}
-                    className="inline-flex items-center gap-1 text-accent-ink font-semibold hover:underline"
-                  >
-                    (Click to switch role)
-                  </button>
-                )}
               </div>
             </div>
 
